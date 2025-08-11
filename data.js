@@ -1,11 +1,11 @@
 // data.js
 
 const JSON_URLS = [
-    "https://raw.githubusercontent.com/Steffen1975-art/family_tree/e82533c1d920243f546947d6e9f4a4d49fb02ba2/Holl_AI_Studio.json",
-    "https://raw.githubusercontent.com/Steffen1975-art/family_tree/e82533c1d920243f546947d6e9f4a4d49fb02ba2/Koller_AI_Studio.json",
-    "https://raw.githubusercontent.com/Steffen1975-art/family_tree/e82533c1d920243f546947d6e9f4a4d49fb02ba2/Messmer_AI_Studio.json",
-    "https://raw.githubusercontent.com/Steffen1975-art/family_tree/e82533c1d920243f546947d6e9f4a4d49fb02ba2/maier_wolfgang_AI_Studio.json",
-    "https://raw.githubusercontent.com/Steffen1975-art/family_tree/e82533c1d920243f546947d6e9f4a4d49fb02ba2/moergenthaler_AI_Studio.json"
+    "Holl_AI_Studio.json",
+    "Koller_AI_Studio.json",
+    "Messmer_AI_Studio.json",
+    "maier_wolfgang_AI_Studio.json",
+    "moergenthaler_AI_Studio.json"
 ];
 
 export async function loadAndProcessData() {
