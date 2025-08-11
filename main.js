@@ -1,12 +1,10 @@
 // main.js
 
-// KORRIGIERTE VERSION - importiert jetzt die korrekte Funktion 'initializeView'
 import { loadAndProcessData } from './data.js';
-import { initializeView } from './view.js'; // DIESE ZEILE IST JETZT KORREKT
+import { initializeView } from './view.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // 1. Lade und verarbeite alle Daten von den JSON-Dateien
         const familyData = await loadAndProcessData();
         
         if (!familyData || familyData.length === 0) {
@@ -14,8 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // 2. Initialisiere die komplette Visualisierung mit den geladenen Daten
-        initializeView(familyData); // DIESE ZEILE IST JETZT KORREKT
+        initializeView(familyData);
 
     } catch (error) {
         console.error("Ein kritischer Fehler ist beim Initialisieren der Anwendung aufgetreten:", error);
