@@ -27,11 +27,10 @@
         .detail-link { cursor: pointer; color: #0ea5e9; }
         .detail-link:hover { text-decoration: underline; }
         .node-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; background-color: white; font-family: 'Inter', sans-serif; }
-         .bridge-icon { font-size: 1.1em; } /* Style for our bridge icon */
+        .bridge-icon { font-size: 1.1em; }
     </style>
 </head>
 <body>
-    <!-- Das ist die komplette UI aus Ihrer ursprünglichen Datei -->
     <div class="absolute top-0 left-0 p-4 md:p-6 z-10 w-full bg-gradient-to-b from-white via-white/80 to-transparent pointer-events-none">
         <h1 id="main-title" class="text-2xl md:text-3xl font-bold text-sky-800">Ahnengalerie</h1>
         <p class="text-slate-600 mt-1 text-sm md:text-base">Ansicht wählen, Knoten anklicken, Zoomen & Verschieben.</p>
@@ -42,6 +41,7 @@
         <div id="cockpit-menu" class="relative flex flex-col items-end">
             <div id="cockpit-options" class="w-72 bg-white/80 backdrop-blur-md rounded-lg shadow-xl mb-4 p-3 space-y-3 opacity-0 transform translate-y-4 transition-all pointer-events-none">
                 <div class="grid grid-cols-2 gap-2">
+                    <!-- Die data-view Attribute müssen den 'origin' Werten entsprechen (Dateinamen) -->
                     <button data-view="Koller_AI_Studio.json" class="view-btn px-3 py-2 text-center rounded-md font-semibold text-slate-700 hover:bg-slate-100">Koller</button>
                     <button data-view="Holl_AI_Studio.json" class="view-btn px-3 py-2 text-center rounded-md font-semibold text-slate-700 hover:bg-slate-100">Holl</button>
                     <button data-view="moergenthaler_AI_Studio.json" class="view-btn px-3 py-2 text-center rounded-md font-semibold text-slate-700 hover:bg-slate-100">Mörgenthaler</button>
@@ -60,8 +60,6 @@
             </button>
         </div>
     </div>
-
-    <!-- Der neue, modulare Einstiegspunkt -->
     <script type="module" src="main.js"></script>
 </body>
 </html>
