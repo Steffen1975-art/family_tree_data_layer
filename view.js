@@ -1,6 +1,6 @@
 // view.js
 
-// FINALE, KORRIGIERTE VERSION - Löst das "missing parent" Problem
+// FINALE, KORRIGIERTE VERSION - Löst das "multiple roots" Problem endgültig
 let svg, g, zoom, detailPanel;
 let root, selectedNode;
 let showDetailPanelTimer, hideDetailPanelTimer;
@@ -19,13 +19,12 @@ export function initializeView(loadedPeopleData) {
     allPeopleData = loadedPeopleData;
     allPeopleMap.clear();
     allPeopleData.forEach(p => {
-        // Bereite die Datenstruktur so vor, wie der Original-Code sie erwartet
         p.details = { geboren: p.details?.birthDate, gestorben: p.details?.deathDate, info: p.details?.notes };
         allPeopleMap.set(p.id, p);
     });
 
     initializeControls();
-    renderTree("Koller_AI_Studio.json"); // Startansicht
+    renderTree("Koller_AI_Studio.json");
 
     window.addEventListener('resize', () => {
         width = window.innerWidth;
@@ -72,7 +71,7 @@ function renderTree(viewKey, targetIdToSelect = null) {
         d3.select('#main-title').text(`${titles.ahnentafel} für ${person ? person.name : ''}`);
         
         const startNodeInFullHierarchy = fullHierarchy.find(d => d.id === startNodeId);
-
+        
         // *** SICHERHEITSABFRAGE ZUR VERHINDERUNG DES ABSTURZES ***
         if (!startNodeInFullHierarchy) {
             g.append("text").attr("x", width/2).attr("y", height/2).attr("text-anchor", "middle").text(`Startperson (ID: ${startNodeId}) konnte nicht gefunden werden.`);
