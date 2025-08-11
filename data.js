@@ -1,11 +1,11 @@
 // data.js
 
 const JSON_URLS = [
-    "Holl_AI_Studio.json",
-    "Koller_AI_Studio.json",
-    "Messmer_AI_Studio.json",
-    "maier_wolfgang_AI_Studio.json",
-    "moergenthaler_AI_Studio.json"
+    "/family_tree/Holl_AI_Studio.json",
+    "/family_tree/Koller_AI_Studio.json",
+    "/family_tree/Messmer_AI_Studio.json",
+    "/family_tree/maier_wolfgang_AI_Studio.json",
+    "/family_tree/moergenthaler_AI_Studio.json"
 ];
 
 export async function loadAndProcessData() {
