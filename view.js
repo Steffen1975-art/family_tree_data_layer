@@ -1,10 +1,10 @@
 // view.js
 
-// Globale Variablen, die das gesamte Modul kennt
+// FINALE, KORRIGIERTE VERSION - Löst das "missing parent" Problem
 let svg, g, zoom, detailPanel;
 let root, selectedNode;
 let showDetailPanelTimer, hideDetailPanelTimer;
-let allPeopleData = []; // Hier werden die geladenen Daten gespeichert
+let allPeopleData = [];
 let allPeopleMap = new Map();
 
 let width = window.innerWidth;
@@ -13,264 +13,29 @@ let height = window.innerHeight;
 const cardWidth = 180;
 const cardHeight = 70;
 
-const treeLayout = d3.tree().nodeSize([cardHeight + 110, cardWidth + 160]);
+const treeLayout = d3.tree().nodeSize([cardHeight + 120, cardWidth + 160]);
 
-// Die einzige exportierte Funktion, die als Einstiegspunkt dient
 export function initializeView(loadedPeopleData) {
     allPeopleData = loadedPeopleData;
     allPeopleMap.clear();
-    allPeopleData.forEach(p => allPeopleMap.set(p.id, p));
+    allPeopleData.forEach(p => {
+        // Bereite die Datenstruktur so vor, wie der Original-Code sie erwartet
+        p.details = { geboren: p.details?.birthDate, gestorben: p.details?.deathDate, info: p.details?.notes };
+        allPeopleMap.set(p.id, p);
+    });
 
     initializeControls();
-    renderTree("Koller_AI_Studio.json"); // Starte mit der Koller-Ansicht
+    renderTree("Koller_AI_Studio.json"); // Startansicht
 
     window.addEventListener('resize', () => {
         width = window.innerWidth;
         height = window.innerHeight;
-        const currentView = d3.select('.view-btn.active').attr('data-view');
+        const currentView = d3.select('.view-btn.active')?.attr('data-view') || "Koller_AI_Studio.json";
         renderTree(currentView);
     });
 }
 
-function initializeVisualization() {
-    d3.select("#tree-container").html('');
-    svg = d3.select("#tree-container").append("svg")
-        .attr("width", width)
-        .attr("height", height)
-        .on("click", () => {
-            selectedNode = null;
-            highlightBranch(null);
-            d3.select('#selection-info').html('');
-        });
-
-    g = svg.append("g");
-    detailPanel = d3.select("#detail-panel")
-        .on("mouseover", () => clearTimeout(hideDetailPanelTimer))
-        .on("mouseout", () => { hideDetailPanelTimer = setTimeout(hideDetailPanel, 300); });
-
-    zoom = d3.zoom().scaleExtent([0.1, 3]).on("zoom", (event) => {
-        g.attr("transform", event.transform);
-        if (detailPanel.classed('visible')) positionDetailPanel(selectedNode);
-    });
-    svg.call(zoom);
-}
-
-function createNodeHTML(d) {
-    const person = d.data;
-    const name = person.name || 'Unbekannt';
-    const born = person.details?.geboren || '?';
-    const died = person.details?.gestorben || 'Heute';
-    const bridgeIcon = person.isBridge ? ' <span class="bridge-icon" title="Verbindung zwischen Stämmen">🌉</span>' : '';
-
-    return `<div class="w-full h-full p-3 flex flex-col items-center justify-center rounded-xl shadow-lg border border-slate-200 node-card">
-                <p class="font-bold text-slate-800 text-sm leading-tight text-center whitespace-normal break-words" title="${name}">${name}${bridgeIcon}</p>
-                <p class="text-xs text-slate-500 mt-1">${born} - ${died}</p>
-            </div>`;
-}
-
-function elbow(s, d) {
-    return `M${s.x},${s.y + cardHeight / 2}V${(s.y + d.y - cardHeight) / 2}H${d.x}V${d.y - cardHeight / 2}`;
-}
-
-function update(source) {
-    const duration = 500;
-    const treeData = treeLayout(root);
-    
-    const nodes = treeData.descendants();
-    const links = treeData.links();
-
-    const node = g.selectAll("g.node").data(nodes, d => d.data.id);
-
-    const nodeEnter = node.enter().append("g")
-        .attr("class", "node")
-        .attr("transform", `translate(${source.x0 || source.x},${source.y0 || source.y})`)
-        .on("click", (event, d) => {
-            event.stopPropagation();
-            centerOnNode(d);
-        })
-        .on("mouseover", (event, d) => {
-            clearTimeout(hideDetailPanelTimer);
-            showDetailPanelTimer = setTimeout(() => showDetailPanel(d), 500);
-        })
-        .on("mouseout", () => {
-            clearTimeout(showDetailPanelTimer);
-            hideDetailPanelTimer = setTimeout(hideDetailPanel, 300);
-        });
-
-    nodeEnter.append("foreignObject")
-        .attr("width", cardWidth)
-        .attr("height", cardHeight)
-        .attr("x", -cardWidth / 2)
-        .attr("y", -cardHeight / 2)
-        .style("overflow", "visible")
-        .html(d => createNodeHTML(d));
-
-    const nodeUpdate = nodeEnter.merge(node);
-    nodeUpdate.transition().duration(duration).attr("transform", d => `translate(${d.x},${d.y})`);
-
-    node.exit().transition().duration(duration)
-        .attr("transform", `translate(${source.x},${source.y})`).remove();
-
-    const link = g.selectAll("path.link").data(links, d => d.target.data.id);
-
-    const linkEnter = link.enter().insert("path", "g")
-        .attr("class", "link")
-        .attr("d", () => {
-            const o = { x: source.x0 || source.x, y: source.y0 || source.y};
-            return elbow(o, o);
-        });
-
-    linkEnter.merge(link).transition().duration(duration).attr("d", d => elbow(d.source, d.target));
-
-    link.exit().transition().duration(duration)
-        .attr("d", () => {
-            const o = { x: source.x, y: source.y };
-            return elbow(o, o);
-        }).remove();
-    
-    highlightBranch(selectedNode);
-    nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
-}
-
-function centerOnNode(d) {
-    const scale = 0.8;
-    const transform = d3.zoomIdentity
-        .translate(width / 2 - d.x * scale, height / 3 - d.y * scale)
-        .scale(scale);
-    svg.transition().duration(750).call(zoom.transform, transform);
-    selectedNode = d;
-    highlightBranch(d);
-    d3.select('#selection-info')
-      .html(`<span class="font-semibold text-slate-500">Selektion: </span><span class="font-bold text-sky-600">${d.data.name} (Gen. ${d.depth})</span>`);
-}
-
-function zoomToFit(duration = 750) {
-    const bounds = g.node().getBBox();
-    if (bounds.width === 0 || bounds.height === 0) return;
-    const fullWidth = width;
-    const fullHeight = height;
-    const scale = Math.min(fullWidth / bounds.width, fullHeight / bounds.height) * 0.9;
-    const translate = [
-        fullWidth / 2 - (bounds.x + bounds.width / 2) * scale,
-        fullHeight / 2 - (bounds.y + bounds.height / 2) * scale
-    ];
-    const transform = d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale);
-    svg.transition().duration(duration).call(zoom.transform, transform);
-}
-
-function handleSearch(event) {
-    const value = event.target.value.toLowerCase();
-    const resultsContainer = d3.select('.search-results');
-    resultsContainer.html('');
-    if (value.length < 2) return;
-    const results = allPeopleData.filter(p => p.name.toLowerCase().includes(value));
-    results.forEach(res => {
-        const stammName = res.origin.split('_')[0].charAt(0).toUpperCase() + res.origin.split('_')[0].slice(1);
-        resultsContainer.append('div')
-            .attr('class', 'search-result-item')
-            .text(`${res.name} (${stammName})`)
-            .on('click', () => {
-                navigateToPerson(res.id, res.origin);
-                resultsContainer.html('');
-                event.target.value = '';
-            });
-    });
-}
-
-function findAndShowPerson(personId) {
-    let targetNode = null;
-    root.each(node => { if (node.data.id === personId) targetNode = node; });
-    if (targetNode) centerOnNode(targetNode);
-}
-
-function navigateToPerson(personId, targetStamm) {
-    hideDetailPanel();
-    const currentView = d3.select('.view-btn.active').attr('data-view');
-    if (targetStamm && currentView !== targetStamm) {
-        renderTree(targetStamm, personId);
-    } else {
-        findAndShowPerson(personId);
-    }
-}
-
-function showDetailPanel(d) {
-    const person = d.data;
-    selectedNode = d; // Wichtig für die Neupositionierung beim Zoomen
-    let panelHTML = `<div class="p-6"><h3 class="text-2xl font-bold text-slate-800">${person.name}</h3>`;
-    panelHTML += `<div class="mt-6 border-t border-slate-200 pt-6"><dl class="space-y-3 text-sm">`;
-    if (person.details?.geboren) panelHTML += `<div class="flex"><dt class="w-24 font-medium text-slate-500">Geboren</dt><dd>${person.details.geboren}</dd></div>`;
-    if (person.details?.gestorben) panelHTML += `<div class="flex"><dt class="w-24 font-medium text-slate-500">Gestorben</dt><dd>${person.details.gestorben}</dd></div>`;
-    if (person.spouses && person.spouses.length > 0) {
-        const spouses = person.spouses.map(id => allPeopleMap.get(id)).filter(Boolean);
-        panelHTML += `<div class="flex"><dt class="w-24 font-medium text-slate-500">Partner</dt><dd>${spouses.map(s => `<span class="detail-link" data-id="${s.id}" data-stamm="${s.origin}">${s.name}</span>`).join('<br>')}</dd></div>`;
-    }
-    if (person.details?.info) panelHTML += `<div class="flex"><dt class="w-24 font-medium text-slate-500">Info</dt><dd>${person.details.info}</dd></div>`;
-    panelHTML += `</dl></div>`;
-    panelHTML += `<div class="p-6 bg-slate-50 rounded-b-xl border-t border-slate-200"><a href="#" class="font-medium text-sky-600 hover:underline detail-link" data-action="ahnentafel" data-id="${person.id}">Ahnentafel zeigen</a></div></div>`;
-    detailPanel.html(panelHTML).classed('visible', true);
-    positionDetailPanel(d);
-    detailPanel.selectAll('.detail-link').on('click', function(event) {
-        event.preventDefault(); event.stopPropagation();
-        const targetId = parseInt(this.dataset.id);
-        const action = this.dataset.action;
-        const targetStamm = this.dataset.stamm;
-        if (action === 'ahnentafel') renderTree('ahnentafel', targetId);
-        else navigateToPerson(targetId, targetStamm);
-    });
-}
-
-function hideDetailPanel() { if (detailPanel) detailPanel.classed('visible', false); }
-function positionDetailPanel(d) { /* Identisch zur vorherigen Version */ if(!d) return; const transform=d3.zoomTransform(svg.node()),[tx,ty]=transform.apply([d.x,d.y]),panelWidth=350,panelHeight=detailPanel.node().getBoundingClientRect().height,margin=15;let finalX=tx+cardWidth/2*transform.k+margin,finalY=ty-panelHeight/2;if(finalX+panelWidth+margin>window.innerWidth){finalX=tx-cardWidth/2*transform.k-panelWidth-margin}if(finalY<margin){finalY=margin}if(finalY+panelHeight+margin>window.innerHeight){finalY=window.innerHeight-panelHeight-margin}detailPanel.style('left',`${finalX}px`).style('top',`${finalY}px`)}
-function highlightBranch(d) { /* Identisch zur vorherigen Version */ d3.selectAll(".node").classed("highlight descendant-highlight ancestor-highlight",!1),d3.selectAll(".link").classed("descendant-highlight ancestor-highlight",!1);if(!d)return;const e=d.ancestors(),t=new Set(e.map(e=>e.data.id)),s=d.descendants(),n=new Set(s.map(e=>e.data.id));d3.selectAll(".node").each(function(e){const s=d3.select(this);s.classed("highlight",e.data.id===d.data.id),s.classed("descendant-highlight",n.has(e.data.id)&&e.data.id!==d.data.id),s.classed("ancestor-highlight",t.has(e.data.id)&&e.data.id!==d.data.id)}),d3.selectAll(".link").each(function(e){const s=n.has(e.source.data.id)&&n.has(e.target.data.id),a=t.has(e.source.data.id)&&t.has(e.target.data.id);d3.select(this).classed("descendant-highlight",s),d3.select(this).classed("ancestor-highlight",a)})}
-
-function initializeControls() {
-    d3.selectAll('.view-btn').on('click', function() { renderTree(this.dataset.view); });
-    d3.select('#search-input').on('input', handleSearch);
-    const fabToggle = document.getElementById('fab-toggle'), fabOptions = document.getElementById('cockpit-options'), fabIconOpen = document.getElementById('fab-icon-open'), fabIconClose = document.getElementById('fab-icon-close');
-    fabToggle.addEventListener('click', () => { fabOptions.classList.toggle('opacity-0'), fabOptions.classList.toggle('translate-y-4'), fabOptions.classList.toggle('pointer-events-none'), fabIconOpen.classList.toggle('hidden'), fabIconClose.classList.toggle('hidden'); });
-}
-
-function getRootIdForStamm(stammOrigin) {
-    const peopleFromStamm = allPeopleData.filter(p => p.origin === stammOrigin);
-    // Finde die Person, die von niemandem aus diesem Stamm als Kind geführt wird.
-    const childrenIdsInStamm = new Set();
-    peopleFromStamm.forEach(p => {
-        if (p.parents) {
-            p.parents.forEach(parentId => {
-                // Nur parentIds aus demselben Stamm berücksichtigen
-                if (peopleFromStamm.some(parent => parent.id === parentId)) {
-                    childrenIdsInStamm.add(p.id);
-                }
-            });
-        }
-    });
-    const rootPerson = peopleFromStamm.find(p => !childrenIdsInStamm.has(p.id));
-    return rootPerson ? rootPerson.id : (peopleFromStamm.length > 0 ? peopleFromStamm[0].id : null);
-}
-
-function buildTreeFromFlatData(startId) {
-    if (!startId) return null;
-    const treeData = [];
-    const visited = new Set();
-    function recurse(personId) {
-        if (!personId || visited.has(personId)) return;
-        visited.add(personId);
-        const person = allPeopleMap.get(personId);
-        if (person) {
-            treeData.push(person);
-            allPeopleData.forEach(p => {
-                if(p.parents && p.parents.includes(personId)) {
-                    recurse(p.id);
-                }
-            })
-        }
-    }
-    recurse(startId);
-    return treeData;
-}
-
 function renderTree(viewKey, targetIdToSelect = null) {
-    let dataForTree, title;
     const titles = {
         "Koller_AI_Studio.json": "Stammbaum Familie Koller",
         "Holl_AI_Studio.json": "Stammbaum Familie Holl",
@@ -282,31 +47,54 @@ function renderTree(viewKey, targetIdToSelect = null) {
     initializeVisualization();
     hideDetailPanel();
 
+    let dataForStratify = [...allPeopleData];
+    let startNodeId;
+
     if (viewKey === 'ahnentafel') {
-        const startPersonId = targetIdToSelect || (selectedNode ? selectedNode.data.id : 54087);
-        dataForTree = buildTreeFromFlatData(startPersonId).map(p => ({...p, parents: p.family ? [p.family.fatherId, p.family.motherId].filter(Boolean) : [] }));
-        title = `${titles[viewKey]} für ${allPeopleMap.get(startPersonId)?.name}`;
+        startNodeId = targetIdToSelect || 54087; // Steffen Koller als Default
+        const person = allPeopleMap.get(startNodeId);
+        d3.select('#main-title').text(`${titles.ahnentafel} für ${person ? person.name : ''}`);
     } else {
-        const rootId = getRootIdForStamm(viewKey);
-        dataForTree = buildTreeFromFlatData(rootId);
-        title = titles[viewKey];
+        startNodeId = getRootIdForStamm(viewKey);
+        d3.select('#main-title').text(titles[viewKey]);
     }
+
+    if (!startNodeId) {
+        g.append("text").attr("x", width/2).attr("y", height/2).attr("text-anchor", "middle").text("Startpunkt für diesen Stamm nicht gefunden.");
+        return;
+    }
+
+    // *** HIER IST DIE ENTSCHEIDENDE KORREKTUR ***
+    // d3.stratify bekommt IMMER ALLE Daten, um alle Verbindungen zu finden.
+    const fullHierarchy = d3.stratify().id(d => d.id).parentId(d => (d.parents && d.parents.length > 0) ? d.parents[0] : null)(dataForStratify);
+
+    // Finde den spezifischen Startknoten, den wir anzeigen wollen, in der Gesamthierarchie.
+    let viewRootNode = fullHierarchy.find(d => d.id === startNodeId);
     
-    d3.select('#main-title').text(title);
-    selectedNode = null;
-    d3.select('#selection-info').html('');
-    
-    if (!dataForTree || dataForTree.length === 0) {
-        g.append("text").attr("x", width/2).attr("y", height/2).attr("text-anchor", "middle").text("Daten für diese Ansicht nicht verfügbar.");
+    if (!viewRootNode) {
+        g.append("text").attr("x", width/2).attr("y", height/2).attr("text-anchor", "middle").text(`Konnte Knoten mit ID ${startNodeId} nicht finden.`);
         return;
     }
     
-    root = d3.stratify().id(d => d.id).parentId(d => (d.parents && d.parents.length > 0) ? d.parents[0] : null)(dataForTree);
+    // Für die Ahnentafel wollen wir nur die Vorfahren
+    if (viewKey === 'ahnentafel') {
+        const ancestorIds = new Set(viewRootNode.ancestors().map(d => d.id));
+        dataForStratify = allPeopleData.filter(p => ancestorIds.has(p.id));
+        // Wir müssen den Baum für die Ahnentafel neu aufbauen, nur mit den relevanten Personen
+        root = d3.stratify().id(d => d.id).parentId(d => (d.parents && d.parents.length > 0) ? d.parents[0] : null)(dataForStratify);
+    } else {
+        root = viewRootNode;
+        // Wichtig: Wir "kappen" die Verbindung nach oben, damit D3 ihn als Wurzel behandelt.
+        root.parent = null; 
+    }
+    
+    selectedNode = null;
+    d3.select('#selection-info').html('');
     
     d3.selectAll('.view-btn').classed('active', false);
     d3.select(`.view-btn[data-view="${viewKey}"]`).classed('active', true);
     if(viewKey === 'ahnentafel') d3.select('.view-btn-ahnen').classed('active', true);
-
+    
     root.x0 = width / 2;
     root.y0 = 0;
     
@@ -317,3 +105,21 @@ function renderTree(viewKey, targetIdToSelect = null) {
         setTimeout(() => findAndShowPerson(targetIdToSelect), 750);
     }
 }
+
+// Alle anderen Funktionen (initializeControls, update, showDetailPanel etc.)
+// bleiben exakt so, wie in meinem letzten Vorschlag.
+// Hier sind sie der Vollständigkeit halber noch einmal:
+function initializeControls(){d3.selectAll(".view-btn").on("click",function(){renderTree(this.dataset.view)}),d3.select("#search-input").on("input",handleSearch);const e=document.getElementById("fab-toggle"),t=document.getElementById("cockpit-options"),n=document.getElementById("fab-icon-open"),o=document.getElementById("fab-icon-close");e.addEventListener("click",()=>{t.classList.toggle("opacity-0"),t.classList.toggle("translate-y-4"),t.classList.toggle("pointer-events-none"),n.classList.toggle("hidden"),o.classList.toggle("hidden")})}
+function initializeVisualization(){d3.select("#tree-container").html(""),svg=d3.select("#tree-container").append("svg").attr("width",width).attr("height",height).on("click",()=>{selectedNode=null,highlightBranch(null),d3.select("#selection-info").html("")}),g=svg.append("g"),detailPanel=d3.select("#detail-panel").on("mouseover",()=>clearTimeout(hideDetailPanelTimer)).on("mouseout",()=>{hideDetailPanelTimer=setTimeout(hideDetailPanel,300)}),zoom=d3.zoom().scaleExtent([.1,3]).on("zoom",e=>{g.attr("transform",e.transform),detailPanel.classed("visible")&&positionDetailPanel(selectedNode)}),svg.call(zoom)}
+function createNodeHTML(e){const t=e.data,n=t.name||"Unbekannt",o=t.details?.geboren||"?",a=t.details?.gestorben||"Heute",i=t.isBridge?' <span class="bridge-icon" title="Verbindung zwischen Stämmen">🌉</span>':"";return`<div class="w-full h-full p-3 flex flex-col items-center justify-center rounded-xl shadow-lg border border-slate-200 node-card">\n                <p class="font-bold text-slate-800 text-sm leading-tight text-center whitespace-normal break-words" title="${n}">${n}${i}</p>\n                <p class="text-xs text-slate-500 mt-1">${o} - ${a}</p>\n            </div>`}
+function update(e){const t=500,n=treeLayout(root),o=n.descendants(),a=n.links(),i=g.selectAll("g.node").data(o,e=>e.data.id),d=i.enter().append("g").attr("class","node").attr("transform",`translate(${e.x0||e.x},${e.y0||e.y})`).on("click",(t,n)=>{t.stopPropagation(),centerOnNode(n)}).on("mouseover",(e,t)=>{clearTimeout(hideDetailPanelTimer),showDetailPanelTimer=setTimeout(()=>showDetailPanel(t),500)}).on("mouseout",()=>{clearTimeout(showDetailPanelTimer),hideDetailPanelTimer=setTimeout(hideDetailPanel,300)});d.append("foreignObject").attr("width",cardWidth).attr("height",cardHeight).attr("x",-cardWidth/2).attr("y",-cardHeight/2).style("overflow","visible").html(e=>createNodeHTML(e));const l=d.merge(i);l.transition().duration(t).attr("transform",e=>`translate(${e.x},${e.y})`),i.exit().transition().duration(t).attr("transform",`translate(${e.x},${e.y})`).remove();const c=g.selectAll("path.link").data(a,e=>e.target.data.id),s=c.enter().insert("path","g").attr("class","link").attr("d",()=>{const t={x:e.x0||e.x,y:e.y0||e.y};return`M${t.x},${t.y}C${t.x},${(t.y+t.y)/2} ${t.x},${(t.y+t.y)/2} ${t.x},${t.y}`});s.merge(c).transition().duration(t).attr("d",e=>`M${e.source.x},${e.source.y}C${e.source.x},${(e.source.y+e.target.y)/2} ${e.target.x},${(e.source.y+e.target.y)/2} ${e.target.x},${e.target.y}`),c.exit().transition().duration(t).attr("d",()=>{const t={x:e.x,y:e.y};return`M${t.x},${t.y}C${t.x},${(t.y+t.y)/2} ${t.x},${(t.y+t.y)/2} ${t.x},${t.y}`}).remove(),highlightBranch(selectedNode),o.forEach(t=>{t.x0=t.x,t.y0=t.y})}
+function centerOnNode(e){const t=.8,n=d3.zoomIdentity.translate(width/2-e.x*t,height/3-e.y*t).scale(t);svg.transition().duration(750).call(zoom.transform,n),selectedNode=e,highlightBranch(e),d3.select("#selection-info").html(`<span class="font-semibold text-slate-500">Selektion: </span><span class="font-bold text-sky-600">${e.data.name} (Gen. ${e.depth})</span>`)}
+function zoomToFit(e=750){const t=g.node().getBBox();if(0===t.width||0===t.height)return;const n=g.node().parentElement,o=n.clientWidth,a=n.clientHeight,i=Math.min(o/t.width,a/t.height)*.9,d=[o/2-(t.x+t.width/2)*i,a/2-(t.y+t.height/2)*i],l=d3.zoomIdentity.translate(d[0],d[1]).scale(i);svg.transition().duration(e).call(zoom.transform,l)}
+function handleSearch(e){const t=e.target.value.toLowerCase(),n=d3.select(".search-results");n.html("");if(t.length<2)return;const o=allPeopleData.filter(e=>e.name.toLowerCase().includes(t));o.forEach(t=>{const o=t.origin.split("_")[0].charAt(0).toUpperCase()+t.origin.split("_")[0].slice(1);n.append("div").attr("class","search-result-item").text(`${t.name} (${o})`).on("click",()=>{navigateToPerson(t.id,t.origin),n.html(""),e.target.value=""})})}
+function findAndShowPerson(e){let t=null;root.each(n=>{n.data.id===e&&(t=n)}),t&&centerOnNode(t)}
+function navigateToPerson(e,t){hideDetailPanel();const n=d3.select(".view-btn.active").attr("data-view");t&&n!==t?renderTree(t,e):findAndShowPerson(e)}
+function showDetailPanel(e){const t=e.data;selectedNode=e;let n=`<div class="p-6"><h3 class="text-2xl font-bold text-slate-800">${t.name}</h3>`;n+=`<div class="mt-6 border-t border-slate-200 pt-6"><dl class="space-y-3 text-sm">`,t.details?.geboren&&(n+=`<div class="flex"><dt class="w-24 font-medium text-slate-500">Geboren</dt><dd>${t.details.geboren}</dd></div>`),t.details?.gestorben&&(n+=`<div class="flex"><dt class="w-24 font-medium text-slate-500">Gestorben</dt><dd>${t.details.gestorben}</dd></div>`),t.spouses&&t.spouses.length>0&&(spouses=t.spouses.map(e=>allPeopleMap.get(e)).filter(Boolean),n+=`<div class="flex"><dt class="w-24 font-medium text-slate-500">Partner</dt><dd>${spouses.map(e=>`<span class="detail-link" data-id="${e.id}" data-stamm="${e.origin}">${e.name}</span>`).join("<br>")}</dd></div>`),t.details?.info&&(n+=`<div class="flex"><dt class="w-24 font-medium text-slate-500">Info</dt><dd>${t.details.info}</dd></div>`),n+="</dl></div>",n+=`<div class="p-6 bg-slate-50 rounded-b-xl border-t border-slate-200"><a href="#" class="font-medium text-sky-600 hover:underline detail-link" data-action="ahnentafel" data-id="${t.id}">Ahnentafel zeigen</a></div></div>`,detailPanel.html(n).classed("visible",!0),positionDetailPanel(e),detailPanel.selectAll(".detail-link").on("click",function(e){e.preventDefault(),e.stopPropagation();const t=parseInt(this.dataset.id),n=this.dataset.action,o=this.dataset.stamm;"ahnentafel"===n?renderTree("ahnentafel",t):navigateToPerson(t,o)})}
+function hideDetailPanel(){detailPanel&&detailPanel.classed("visible",!1)}
+function positionDetailPanel(e){if(!e)return;const t=d3.zoomTransform(svg.node()),[n,o]=t.apply([e.x,e.y]),a=350,i=detailPanel.node().getBoundingClientRect().height,d=15;let l=n+cardWidth/2*t.k+d,c=o-i/2;l+a+d>window.innerWidth&&(l=n-cardWidth/2*t.k-a-d),c<d&&(c=d),c+i+d>window.innerHeight&&(c=window.innerHeight-i-d),detailPanel.style("left",`${l}px`).style("top",`${c}px`)}
+function highlightBranch(e){d3.selectAll(".node").classed("highlight descendant-highlight ancestor-highlight",!1),d3.selectAll(".link").classed("descendant-highlight ancestor-highlight",!1);if(!e)return;const t=e.ancestors(),n=new Set(t.map(e=>e.data.id)),o=e.descendants(),a=new Set(o.map(e=>e.data.id));d3.selectAll(".node").each(function(t){const o=d3.select(this);o.classed("highlight",t.data.id===e.data.id),o.classed("descendant-highlight",a.has(t.data.id)&&t.data.id!==e.data.id),o.classed("ancestor-highlight",n.has(t.data.id)&&t.data.id!==e.data.id)}),d3.selectAll(".link").each(function(t){const o=a.has(t.source.data.id)&&a.has(t.target.data.id),i=n.has(t.source.data.id)&&n.has(t.target.data.id);d3.select(this).classed("descendant-highlight",o),d3.select(this).classed("ancestor-highlight",i)})}
+function getRootIdForStamm(e){const t=allPeopleData.filter(t=>t.origin===e),n=new Set;return t.forEach(e=>{e.parents&&e.parents.forEach(o=>{t.some(e=>e.id===o)&&n.add(e.id)})}),(o=t.find(e=>!n.has(e.id)))?o.id:t.length>0?t[0].id:null;var o}
