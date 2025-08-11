@@ -1,6 +1,6 @@
 // data.js
 
-// FINALE KORREKTUR 2: Die Struktur der JSON-Dateien berücksichtigen.
+// FINALE, ROBUSTE VERSION: Fügt eine Sicherheitsüberprüfung hinzu.
 const JSON_URLS = [
     "/family_tree/Holl_AI_Studio.json",
     "/family_tree/Koller_AI_Studio.json",
@@ -18,14 +18,20 @@ export async function loadAndProcessData() {
     const aggregatedData = [];
     const processedNames = new Set();
 
-    // HIER IST DIE ÄNDERUNG:
     rawDataObjects.forEach((dataObject, index) => {
         const originFile = JSON_URLS[index].split('/').pop();
         
-        // Wir greifen auf die Liste *innerhalb* des Objekts zu.
-        const peopleArray = dataObject.family_tree_data_layer;
+        // HIER IST DIE FINALE KORREKTUR:
+        // Wir prüfen, ob das Objekt und der Schlüssel 'family_tree_data_layer' existieren.
+        const peopleArray = dataObject ? dataObject.family_tree_data_layer : undefined;
 
-        // Jetzt führen wir die Schleife auf der korrekten Liste aus.
+        // Wenn die Liste nicht gefunden wurde, geben wir eine Warnung aus und überspringen diese Datei.
+        if (!peopleArray || !Array.isArray(peopleArray)) {
+            console.warn(`Warnung: In der Datei "${originFile}" wurde keine gültige Personen-Liste gefunden. Die Datei wird übersprungen.`);
+            return; // 'return' in forEach wirkt wie 'continue' in einer normalen Schleife
+        }
+
+        // Ab hier ist der Code sicher, da wir wissen, dass 'peopleArray' eine Liste ist.
         peopleArray.forEach(person => {
             if (!processedNames.has(person.name)) {
                 person.origin = originFile;
