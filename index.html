@@ -1,34 +1,67 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-    <meta charset="utf-8">
-    <title>Refaktorierter Stammbaum</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interaktiver Stammbaum - Refactored</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        .node circle {
-            fill: #999;
-        }
-        .node text {
-            font: 12px sans-serif;
-        }
-        .node--internal circle {
-            fill: #555;
-        }
-        .node--internal text {
-            text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
-        }
-        .link {
-            fill: none;
-            stroke: #555;
-            stroke-opacity: 0.4;
-            stroke-width: 1.5px;
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; overflow: hidden; }
+        #tree-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        .link { fill: none; stroke: #cbd5e1; stroke-width: 2px; transition: stroke 0.5s ease, stroke-width 0.5s ease; }
+        .node { cursor: pointer; }
+        .node.highlight .node-card { box-shadow: 0 0 0 4px #f43f5e; transform: scale(1.05); }
+        .node.descendant-highlight .node-card, .node.ancestor-highlight .node-card { box-shadow: 0 0 0 3px #22c55e; }
+        .link.descendant-highlight, .link.ancestor-highlight { stroke: #16a34a; stroke-width: 3px; }
+        .node:hover .node-card { transform: scale(1.05); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+        .view-btn.active { background-color: #e0f2fe; color: #0284c7; font-weight: 700; }
+        .view-btn-ahnen.active { background-color: #fcd34d; color: #92400e; }
+        .search-container { position: relative; }
+        .search-results { position: absolute; bottom: 100%; left: 0; right: 0; width: 100%; background: white; border: 1px solid #d1d5db; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 60; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); margin-bottom: 0.5rem; }
+        .search-result-item { padding: 0.5rem; cursor: pointer; font-size: 0.875rem; }
+        .search-result-item:hover { background-color: #f1f5f9; }
+        #detail-panel { position: absolute; width: 350px; background-color: white; border-radius: 0.75rem; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; opacity: 0; pointer-events: none; transition: opacity 0.3s, top 0.3s, left 0.3s; z-index: 15; }
+        #detail-panel.visible { opacity: 1; pointer-events: all; }
+        .detail-link { cursor: pointer; color: #0ea5e9; }
+        .detail-link:hover { text-decoration: underline; }
+        .node-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; background-color: white; font-family: 'Inter', sans-serif; }
+         .bridge-icon { font-size: 1.1em; } /* Style for our bridge icon */
     </style>
 </head>
 <body>
-    <!-- D3.js Bibliothek -->
-    <script src="https://d3js.org/d3.v4.min.js"></script>
-    
-    <!-- Applikations-Logik wird über Module geladen -->
+    <!-- Das ist die komplette UI aus Ihrer ursprünglichen Datei -->
+    <div class="absolute top-0 left-0 p-4 md:p-6 z-10 w-full bg-gradient-to-b from-white via-white/80 to-transparent pointer-events-none">
+        <h1 id="main-title" class="text-2xl md:text-3xl font-bold text-sky-800">Ahnengalerie</h1>
+        <p class="text-slate-600 mt-1 text-sm md:text-base">Ansicht wählen, Knoten anklicken, Zoomen & Verschieben.</p>
+    </div>
+    <div id="tree-container"></div>
+    <div id="detail-panel"></div>
+    <div class="fixed bottom-4 right-4 z-50">
+        <div id="cockpit-menu" class="relative flex flex-col items-end">
+            <div id="cockpit-options" class="w-72 bg-white/80 backdrop-blur-md rounded-lg shadow-xl mb-4 p-3 space-y-3 opacity-0 transform translate-y-4 transition-all pointer-events-none">
+                <div class="grid grid-cols-2 gap-2">
+                    <button data-view="Koller_AI_Studio.json" class="view-btn px-3 py-2 text-center rounded-md font-semibold text-slate-700 hover:bg-slate-100">Koller</button>
+                    <button data-view="Holl_AI_Studio.json" class="view-btn px-3 py-2 text-center rounded-md font-semibold text-slate-700 hover:bg-slate-100">Holl</button>
+                    <button data-view="moergenthaler_AI_Studio.json" class="view-btn px-3 py-2 text-center rounded-md font-semibold text-slate-700 hover:bg-slate-100">Mörgenthaler</button>
+                    <button data-view="maier_wolfgang_AI_Studio.json" class="view-btn px-3 py-2 text-center rounded-md font-semibold text-slate-700 hover:bg-slate-100">Maier (W)</button>
+                    <button data-view="ahnentafel" class="col-span-2 view-btn view-btn-ahnen px-3 py-2 text-center rounded-md font-bold text-amber-800 bg-amber-200 hover:bg-amber-300">Ahnentafel</button>
+                </div>
+                <div class="search-container">
+                    <input type="text" id="search-input" placeholder="Personensuche..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                    <div class="search-results"></div>
+                </div>
+                <div id="selection-info" class="border-t border-slate-200 pt-2 text-sm"></div>
+            </div>
+            <button id="fab-toggle" class="w-16 h-16 rounded-full bg-sky-600 text-white shadow-lg flex items-center justify-center transform hover:scale-110 transition-transform">
+                <svg id="fab-icon-open" xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                <svg id="fab-icon-close" xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Der neue, modulare Einstiegspunkt -->
     <script type="module" src="main.js"></script>
 </body>
 </html>
