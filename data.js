@@ -1,5 +1,6 @@
 // data.js
 
+// FINALE KORREKTUR 2: Die Struktur der JSON-Dateien berücksichtigen.
 const JSON_URLS = [
     "/family_tree/Holl_AI_Studio.json",
     "/family_tree/Koller_AI_Studio.json",
@@ -9,14 +10,23 @@ const JSON_URLS = [
 ];
 
 export async function loadAndProcessData() {
-    console.log("Starte Daten-Ladevorgang...");
+    console.log("Starte Daten-Ladevorgang von Projekt-relativen Pfaden...");
+
     const responses = await Promise.all(JSON_URLS.map(url => fetch(url)));
-    const rawDataArrays = await Promise.all(responses.map(res => res.json()));
+    const rawDataObjects = await Promise.all(responses.map(res => res.json()));
+
     const aggregatedData = [];
     const processedNames = new Set();
-    rawDataArrays.forEach((dataArray, index) => {
+
+    // HIER IST DIE ÄNDERUNG:
+    rawDataObjects.forEach((dataObject, index) => {
         const originFile = JSON_URLS[index].split('/').pop();
-        dataArray.forEach(person => {
+        
+        // Wir greifen auf die Liste *innerhalb* des Objekts zu.
+        const peopleArray = dataObject.family_tree_data_layer;
+
+        // Jetzt führen wir die Schleife auf der korrekten Liste aus.
+        peopleArray.forEach(person => {
             if (!processedNames.has(person.name)) {
                 person.origin = originFile;
                 person.isBridge = false;
@@ -27,9 +37,11 @@ export async function loadAndProcessData() {
             }
         });
     });
+
     const dataById = new Map(aggregatedData.map(p => [p.id, p]));
     healConnections(aggregatedData, dataById);
     identifyBridgePersons(aggregatedData, dataById);
+
     console.log(`Datenverarbeitung abgeschlossen. ${aggregatedData.length} Personen geladen.`);
     return aggregatedData;
 }
