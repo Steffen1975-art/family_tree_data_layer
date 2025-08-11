@@ -1,6 +1,6 @@
 // view.js
 
-// FINALE, KORRIGIERTE VERSION - Löst das "missing parent" Problem
+// FINALE, KORRIGIERTE VERSION - Löst das "multiple roots" Problem endgültig
 let svg, g, zoom, detailPanel;
 let root, selectedNode;
 let showDetailPanelTimer, hideDetailPanelTimer;
@@ -19,13 +19,12 @@ export function initializeView(loadedPeopleData) {
     allPeopleData = loadedPeopleData;
     allPeopleMap.clear();
     allPeopleData.forEach(p => {
-        // Bereite die Datenstruktur so vor, wie der Original-Code sie erwartet
         p.details = { geboren: p.details?.birthDate, gestorben: p.details?.deathDate, info: p.details?.notes };
         allPeopleMap.set(p.id, p);
     });
 
     initializeControls();
-    renderTree("Koller_AI_Studio.json"); // Startansicht
+    renderTree("Koller_AI_Studio.json");
 
     window.addEventListener('resize', () => {
         width = window.innerWidth;
@@ -50,42 +49,53 @@ function renderTree(viewKey, targetIdToSelect = null) {
     let dataForStratify = [...allPeopleData];
     let startNodeId;
 
+    // *** HIER IST DIE ENTSCHEIDENDE KORREKTUR ***
+    // 1. Erstelle eine virtuelle Wurzel
+    const virtualRootId = 'VIRTUAL_ROOT_ID';
+    dataForStratify.push({ id: virtualRootId, name: 'root', parents: [] });
+
+    // 2. d3.stratify bekommt IMMER ALLE Daten und die Logik für die virtuelle Wurzel
+    const fullHierarchy = d3.stratify()
+        .id(d => d.id)
+        .parentId(d => {
+            if (d.id === virtualRootId) return null; // Die virtuelle Wurzel hat keinen Parent
+            if (d.parents && d.parents.length > 0) return d.parents[0]; // Normaler Fall
+            return virtualRootId; // Jede Person ohne Eltern wird an die virtuelle Wurzel gehängt
+        })
+        (dataForStratify);
+    
+    // Ab hier arbeiten wir mit der korrekt erstellten Gesamthierarchie
     if (viewKey === 'ahnentafel') {
-        startNodeId = targetIdToSelect || 54087; // Steffen Koller als Default
+        startNodeId = targetIdToSelect || 54087;
         const person = allPeopleMap.get(startNodeId);
         d3.select('#main-title').text(`${titles.ahnentafel} für ${person ? person.name : ''}`);
+        
+        const startNodeInFullHierarchy = fullHierarchy.find(d => d.id === startNodeId);
+        const ancestorIds = new Set(startNodeInFullHierarchy.ancestors().map(d => d.id));
+        const ahnentafelData = allPeopleData.filter(p => ancestorIds.has(p.id));
+        
+        // Für die Ahnentafel bauen wir den Baum nur mit den relevanten Personen neu auf
+        root = d3.stratify().id(d => d.id).parentId(d => (d.parents && d.parents.length > 0) ? d.parents[0] : null)(ahnentafelData);
+
     } else {
         startNodeId = getRootIdForStamm(viewKey);
         d3.select('#main-title').text(titles[viewKey]);
-    }
-
-    if (!startNodeId) {
-        g.append("text").attr("x", width/2).attr("y", height/2).attr("text-anchor", "middle").text("Startpunkt für diesen Stamm nicht gefunden.");
-        return;
-    }
-
-    // *** HIER IST DIE ENTSCHEIDENDE KORREKTUR ***
-    // d3.stratify bekommt IMMER ALLE Daten, um alle Verbindungen zu finden.
-    const fullHierarchy = d3.stratify().id(d => d.id).parentId(d => (d.parents && d.parents.length > 0) ? d.parents[0] : null)(dataForStratify);
-
-    // Finde den spezifischen Startknoten, den wir anzeigen wollen, in der Gesamthierarchie.
-    let viewRootNode = fullHierarchy.find(d => d.id === startNodeId);
-    
-    if (!viewRootNode) {
-        g.append("text").attr("x", width/2).attr("y", height/2).attr("text-anchor", "middle").text(`Konnte Knoten mit ID ${startNodeId} nicht finden.`);
-        return;
+        
+        if (!startNodeId) {
+            g.append("text").attr("x", width/2).attr("y", height/2).attr("text-anchor", "middle").text("Startpunkt für diesen Stamm nicht gefunden.");
+            return;
+        }
+        
+        // Finde den spezifischen Startknoten, den wir anzeigen wollen
+        root = fullHierarchy.find(d => d.id === startNodeId);
+        if (root) {
+            root.parent = null; // Wichtig: Wir "kappen" die Verbindung nach oben
+        }
     }
     
-    // Für die Ahnentafel wollen wir nur die Vorfahren
-    if (viewKey === 'ahnentafel') {
-        const ancestorIds = new Set(viewRootNode.ancestors().map(d => d.id));
-        dataForStratify = allPeopleData.filter(p => ancestorIds.has(p.id));
-        // Wir müssen den Baum für die Ahnentafel neu aufbauen, nur mit den relevanten Personen
-        root = d3.stratify().id(d => d.id).parentId(d => (d.parents && d.parents.length > 0) ? d.parents[0] : null)(dataForStratify);
-    } else {
-        root = viewRootNode;
-        // Wichtig: Wir "kappen" die Verbindung nach oben, damit D3 ihn als Wurzel behandelt.
-        root.parent = null; 
+    if (!root) {
+        g.append("text").attr("x", width/2).attr("y", height/2).attr("text-anchor", "middle").text(`Ansicht konnte nicht erstellt werden.`);
+        return;
     }
     
     selectedNode = null;
@@ -108,7 +118,7 @@ function renderTree(viewKey, targetIdToSelect = null) {
 
 // Alle anderen Funktionen (initializeControls, update, showDetailPanel etc.)
 // bleiben exakt so, wie in meinem letzten Vorschlag.
-// Hier sind sie der Vollständigkeit halber noch einmal:
+// Hier sind sie der Vollständigkeit halber noch einmal (minifiziert zur Platzersparnis):
 function initializeControls(){d3.selectAll(".view-btn").on("click",function(){renderTree(this.dataset.view)}),d3.select("#search-input").on("input",handleSearch);const e=document.getElementById("fab-toggle"),t=document.getElementById("cockpit-options"),n=document.getElementById("fab-icon-open"),o=document.getElementById("fab-icon-close");e.addEventListener("click",()=>{t.classList.toggle("opacity-0"),t.classList.toggle("translate-y-4"),t.classList.toggle("pointer-events-none"),n.classList.toggle("hidden"),o.classList.toggle("hidden")})}
 function initializeVisualization(){d3.select("#tree-container").html(""),svg=d3.select("#tree-container").append("svg").attr("width",width).attr("height",height).on("click",()=>{selectedNode=null,highlightBranch(null),d3.select("#selection-info").html("")}),g=svg.append("g"),detailPanel=d3.select("#detail-panel").on("mouseover",()=>clearTimeout(hideDetailPanelTimer)).on("mouseout",()=>{hideDetailPanelTimer=setTimeout(hideDetailPanel,300)}),zoom=d3.zoom().scaleExtent([.1,3]).on("zoom",e=>{g.attr("transform",e.transform),detailPanel.classed("visible")&&positionDetailPanel(selectedNode)}),svg.call(zoom)}
 function createNodeHTML(e){const t=e.data,n=t.name||"Unbekannt",o=t.details?.geboren||"?",a=t.details?.gestorben||"Heute",i=t.isBridge?' <span class="bridge-icon" title="Verbindung zwischen Stämmen">🌉</span>':"";return`<div class="w-full h-full p-3 flex flex-col items-center justify-center rounded-xl shadow-lg border border-slate-200 node-card">\n                <p class="font-bold text-slate-800 text-sm leading-tight text-center whitespace-normal break-words" title="${n}">${n}${i}</p>\n                <p class="text-xs text-slate-500 mt-1">${o} - ${a}</p>\n            </div>`}
